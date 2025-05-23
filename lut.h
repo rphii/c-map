@@ -6,7 +6,8 @@
 #include <stdbool.h>
 
 #define lut_free(lut)   _lut_free(&lut)
-#define lut_add(lut, key, val)  (*(typeof(val) *)(_lut_add2(&lut, sizeof(*lut), (void *)(uintptr_t)key, sizeof(key))) = val)
+#define lut_add(lut, key, val)  (*(typeof(val) *)(_lut_add2(&lut, sizeof(*lut), (void *)(uintptr_t)key)) = val)
+#define lut_config(lut, key_type, key_cmp, key_hash)    _lut_config(&lut, sizeof(key_type), key_cmp, key_hash)
 
 //void *_lut_iter_all(lut, 
 
@@ -18,20 +19,21 @@ void lut_ref(void *lut, void *key);
 void lut_copy(void *lut, void *key);
 void lut_del(void *lut, void *key);
 
-size_t lut_cap(void *lut);
-void *_lut_add2(void *lut, size_t size_val, void *key, size_t size_key);
-void _lut_free(void *lut);
-
 typedef size_t (*LutHash)(void *);
 typedef int (*LutCmp)(void *, void *);
+
+size_t lut_cap(void *lut);
+void *_lut_add2(void *lut, size_t size_val, void *key);
+void _lut_free(void *lut);
+void _lut_config(void *lut, size_t key_size, LutCmp key_cmp, LutHash key_hash);
 
 void lut_set_hash(void *lut, LutHash hash);
 void lut_set_cmp(void *lut, LutCmp cmp);
 
 typedef struct LutMeta {
     size_t hash;
-    void *key;
     void *val;
+    void *key;
 } LutMeta;
 
 void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width);
