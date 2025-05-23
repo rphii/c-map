@@ -213,7 +213,9 @@ void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
-    assert(l->key.size);
+    if(!l->key.size) {
+        map_error("cannot have a key size of zero");
+    }
     size_t size = size_val + l->key.size + sizeof(MapMeta);
     if(3 * l->used / 2 >= map_width_cap(l->width)) {
         *p = _map_grow2(*p MAP_DEBUG_ARGS, l->key.size, size_val, l->width + 2);
@@ -228,6 +230,14 @@ void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {
     memcpy(meta_key, &key, l->key.size);
     void *meta_val = mapmeta_val(item);
     return meta_val;
+}
+
+void *_map_once(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {
+    map_assert_arg(map);
+    if(_map_get(map, key)) {
+        map_error("key already exists");
+    }
+    return _map_set(map MAP_DEBUG_ARGS, size_val, key);
 }
 
 MapMeta *_map_it_next(void *map, MapMeta *prev) {
