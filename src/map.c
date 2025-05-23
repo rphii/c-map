@@ -8,22 +8,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define LUT_EMPTY       SIZE_MAX
+#define LUT_EMPTY               SIZE_MAX
 
-#define map_get_at(l, index)  &l->data[index]
+#define map_get_at(l, index)    &l->data[index]
+#define map_width_cap(width)    (!!width * (size_t)1ULL << width)
 
-#define map_width_cap(width)  (!!width * (size_t)1ULL << width)
-#define map_base(map)   ((map) - offsetof(Map, data))
+#define map_assert_arg(arg)     assert(arg && "null pointer argument!");
+#define map_base(map)           ((map) - offsetof(Map, data))
 
 #define map_must_exist(map)   do { \
         if(!map) { \
-            map = map_init(); \
+            map = map_init(MAP_DEBUG_ARG); \
         } \
     } while(0)
 
 #define map_error(msg, ...)     do { \
-        printf("\n" "lookup error: " msg "\n" , ##__VA_ARGS__); \
-        /*printf("\n" VEC_DEBUG_FMT "lookup error: " msg "\n" VEC_DEBUG_ARGS, ##__VA_ARGS__);*/ \
+        printf("\n" MAP_DEBUG_FMT "map error: " msg "\n" MAP_DEBUG_ARGS, ##__VA_ARGS__); \
         exit(1); \
     } while(0)
 
@@ -42,33 +42,38 @@ typedef struct Map {
     MapMeta *data;
 } Map;
 
-static inline void *map_init(void) {
+static inline void *map_init(MAP_DEBUG_DEF) {
     Map *l = malloc(sizeof(Map));
     if(!l) {
-        map_error("could not create lookup table");
+        map_error("could not create map");
     }
     memset(l, 0, sizeof(*l));
     return &l->data;
 }
 
 void *mapmeta_key(MapMeta *meta) {
+    map_assert_arg(meta);
     return meta->key;
 }
 void *mapmeta_val(MapMeta *meta) {
+    map_assert_arg(meta);
     return meta->val;
 }
 
 size_t map_len(void *map) {
+    if(!map) return 0;
     Map *l = map_base(map);
     return l->used;
 }
 
 size_t map_cap(void *map) {
+    if(!map) return 0;
     Map *l = map_base(map);
     return map_width_cap(l->width);
 }
 
 void map_clear(void *map) {
+    if(!map) return;
     Map *l = map_base(map);
     size_t cap = map_width_cap(l->width);
     for(size_t i = 0; i < cap; ++i) {
@@ -78,14 +83,19 @@ void map_clear(void *map) {
 }
 
 void mapmeta_activate(Map *map, MapMeta *item, size_t size_val) {
+    map_assert_arg(map);
+    map_assert_arg(item);
+    map_assert_arg(size_val);
     size_t cap = map_width_cap(map->width);
     size_t i = item - map->data;
-    item->key = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)));
-    item->val = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)) + map->key.size);
+    item->val = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)));
+    item->key = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)) + size_val);
     ++map->used;
 }
 
 void mapmeta_deactivate(Map *map, MapMeta *item) {
+    map_assert_arg(map);
+    map_assert_arg(item);
     if(item->hash != LUT_EMPTY) --map->used;
     item->hash = LUT_EMPTY;
     item->key = 0;
@@ -93,6 +103,8 @@ void mapmeta_deactivate(Map *map, MapMeta *item) {
 }
 
 void mapmeta_free(Map *map, MapMeta *item) {
+    map_assert_arg(map);
+    map_assert_arg(item);
     /* wow, this is cursed XD */
     if(item->key && map->key.f) map->key.f((uintptr_t *) * (uintptr_t *)item->key);
     if(item->val && map->val.f) map->val.f((uintptr_t *) * (uintptr_t *)item->val);
@@ -100,13 +112,13 @@ void mapmeta_free(Map *map, MapMeta *item) {
 }
 
 static MapMeta *_map_get_item(Map *map, void *key, size_t hash, bool intend_to_set) {
+    map_assert_arg(map);
     if(!intend_to_set && !map->used) return 0;
     size_t perturb = hash >> 5;
     size_t mask = ~(SIZE_MAX << map->width);
     size_t i = mask & hash;
     MapMeta *item = map_get_at(map, i);
     for(size_t n = 1; n < map->width; ++n) {
-        //printf("item %p @ %zu", item, i);getchar();
         if(intend_to_set && item->hash == LUT_EMPTY) break;
         if(item->hash == hash) {
             void *meta_key = mapmeta_key(item);
@@ -123,16 +135,22 @@ static MapMeta *_map_get_item(Map *map, void *key, size_t hash, bool intend_to_s
     return item;
 }
 
-static void *_map_grow2(void *map, size_t size_key, size_t size_val, size_t width) {
+static void *_map_grow2(void *map MAP_DEBUG_DEFS, size_t size_key, size_t size_val, size_t width) {
     Map zero = {0};
     Map *l = map ? map_base(map) : &zero;
     if(map && width <= l->width) return map;
     size_t cap_old = map_width_cap(l->width);
     size_t cap = map_width_cap(width);
+    if(cap * 2 < cap) {
+        map_error("invalid allocation size: %zu", cap);
+    }
     size_t bytes = sizeof(Map) + (sizeof(MapMeta) + size_key + size_val) * cap;
+    if((bytes - sizeof(Map)) / (sizeof(MapMeta) - size_key - size_val != cap)) {
+        map_error("failed allocation of: %zu elements (%zu bytes)", cap, bytes);
+    }
     Map *grown = malloc(bytes);
     if(!grown) {
-        map_error("could not allocate lookup table");
+        map_error("could not allocate map");
     }
     memcpy(grown, l, sizeof(*grown));
     grown->used = 0; /* will be increased with activate */
@@ -149,7 +167,6 @@ static void *_map_grow2(void *map, size_t size_key, size_t size_val, size_t widt
     if(map) {
         for(size_t i = 0; i < cap_old; ++i) {
             MapMeta *src = map_get_at(l, i);
-            // println("  re-add src %3zu : %p", i, src);
             if(src->hash == LUT_EMPTY) continue;
             size_t hash = src->hash;
             MapMeta *item = _map_get_item(grown, mapmeta_key(src), hash, true);
@@ -163,32 +180,43 @@ static void *_map_grow2(void *map, size_t size_key, size_t size_val, size_t widt
     return &grown->data;
 }
 
-
-void _map_config_key(void *map, size_t key_size, MapCmp key_cmp, MapHash key_hash) {
+void _map_config_key(void *map MAP_DEBUG_DEFS, size_t key_size, MapCmp key_cmp, MapHash key_hash, MapFree key_free) {
+    map_assert_arg(map);
+    if(!key_size) {
+        map_error("key size cannot be 0");
+    }
+    if(!key_cmp) {
+        map_error("invalid key comparison function");
+    }
+    if(!key_hash) {
+        map_error("invalid key hashing function");
+    }
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
     l->key.hash = key_hash;
     l->key.cmp = key_cmp;
     l->key.size = key_size;
+    l->key.f = key_free;
 }
 
-void _map_config_free(void *map, MapFree free_key, MapFree free_val) {
+void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree free_val) {
+    map_assert_arg(map);
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
-    l->key.f = free_key;
     l->val.f = free_val;
 }
 
-void *_map_set(void *map, size_t size_val, void *key) {
+void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {
+    map_assert_arg(map);
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
     assert(l->key.size);
     size_t size = size_val + l->key.size + sizeof(MapMeta);
     if(3 * l->used / 2 >= map_width_cap(l->width)) {
-        *p = _map_grow2(*p, l->key.size, size_val, l->width + 2);
+        *p = _map_grow2(*p MAP_DEBUG_ARGS, l->key.size, size_val, l->width + 2);
     }
     l = map_base(*p);
     size_t hash = l->key.hash(key) % LUT_EMPTY;
@@ -218,12 +246,14 @@ MapMeta *_map_it_next(void *map, MapMeta *prev) {
 }
 
 void *_map_get(void *map, void *key) {
+    if(!map) return 0;
     Map *l = map_base(map);
     MapMeta *got = _map_get_item(l, key, l->key.hash(key), false);
     return got->val;
 }
 
 void _map_del(void *map, void *key) {
+    if(!map) return;
     Map *l = map_base(map);
     MapMeta *item = _map_get_item(l, key, l->key.hash(key), false);
     if(item) {
@@ -233,6 +263,7 @@ void _map_del(void *map, void *key) {
 }
 
 void _map_free(void *map) {
+    map_assert_arg(map);
     void **p = map;
     if(!*p) return;
     Map *l = map_base(*p);
