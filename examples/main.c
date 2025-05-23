@@ -38,8 +38,7 @@ void str_free(char *s) {
 int main(void) {
 
     unsigned long *ages = 0; /* set to 0! */
-    map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash);
-    map_config_free(ages, (MapFree)str_free, 0);
+    map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash, (MapFree)str_free);
 
     char *names[] = { /* random names from https://1000randomnames.com/ */
         "Maxine Houston",
