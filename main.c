@@ -1,93 +1,76 @@
+#define VECTOR_IMPLEMENTATION
+#include "../c-vector-simple/vector.h"
 #include "lut.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 size_t hash(unsigned long value) {
-    return (((value + 123) * 98752315538ULL) >> 4) ^ (((value + 987) * 87273391236ULL) << 6);
+#if 0
+    size_t hash = value;
+#else
+    size_t hash = (value + 12345ULL);
+    hash = ((hash >> 32) ^ hash) * 0x85322754398623ULL;
+    hash = ((hash >> 32) ^ hash) * 0x85322754398623ULL;
+    hash = ((hash >> 32) ^ hash);
+#endif
+    return hash;
 }
 
 int cmp(unsigned long a, unsigned long b) {
     unsigned long result = a - b;
-    println("compare %lu %lu = %lu", a, b, result);
+    //println("compare %lu %lu = %lu", a, b, result);
     return result;
+}
+
+char *str_create(char *str) {
+    char *s = 0;
+    size_t len = strlen(str);
+    vec_resize(s, len + 1);
+    memcpy(s, str, len);
+    s[len] = 0;
+    return s;
+}
+
+size_t str_hash(char *str)
+{
+    size_t hash = 5381;
+    int c = 0;
+    while((c = *str++)) {
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    }
+    return hash;
+}
+
+int str_cmp(char *a, char *b) {
+    size_t la = vec_len(a);
+    size_t lb = vec_len(b);
+    if(la != lb) return la - lb;
+    return memcmp(a, b, la);
+}
+
+void str_free(char *s) {
+    vec_free(s);
 }
 
 int main(void) {
 
-    unsigned long *values = 0;
-    //lut_set_cmp(&values, (LutCmp)cmp);
-    //lut_set_hash(&values, (LutHash)hash);
-    lut_config(values, int, (LutCmp)cmp, (LutHash)hash);
+    unsigned long *ages = 0;
+    lut_config(ages, char *, (LutCmp)str_cmp, (LutHash)str_hash);
+    lut_config_free(ages, (LutFree)str_free, 0);
 
-    int key = 0xBB;
-    unsigned long value = 456;
+    lut_add(ages, str_create("John"), 19);
+    lut_add(ages, str_create("Lmao"), 25);
+    lut_add(ages, str_create("Nice"), 69);
+    lut_add(ages, str_create("Why"), 420);
 
-#if 0
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 2);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 4);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 6);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 8);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 10);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 12);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 14);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 16);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 18);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 20);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 22);
-    printf("lut_cap %zu\n", lut_cap(values));
-    values = _lut_grow2(values, sizeof(*values)+sizeof(key)+sizeof(LutMeta), 24);
-    printf("lut_cap %zu\n", lut_cap(values));
-    lut_free(&values, sizeof(*values)+sizeof(key)+sizeof(LutMeta));
-#endif
-
-    lut_add(values, key, value);
-    lut_print(values);
-    lut_add(values, key, 0xBB);
-    lut_print(values);
-
-    key = 333;
-    value = 999;
-    lut_add(values, key, value);
-    lut_print(values);
-
-    value = 0xAA;
-    lut_add(values, key, value);
-    lut_print(values);
-    lut_add(values, key, value);
-    lut_print(values);
-    lut_add(values, key, value);
-
-    //*(typeof(value) *)_lut_add2(&values, sizeof(*values), (void *)(uintptr_t)key, sizeof(key)) = value;
-
-    //*(typeof(value) *)_lut_add2(&values, sizeof(*values), (void *)(uintptr_t)key, sizeof(key)) = value;
-    lut_print(values);
-
-    /// *(typeof(value) *)_lut_add2(&values, sizeof(*values), (void *)(uintptr_t)key, sizeof(key)) = value;
-    /// lut_print(values);
-    /// *(typeof(value) *)_lut_add2(&values, sizeof(*values), (void *)(uintptr_t)key, sizeof(key)) = value;
-    /// lut_print(values);
-    /// //*(typeof(value) *)_lut_add2(&values, sizeof(*values), (void *)(uintptr_t)key, sizeof(key)) = value;
-    /// //println("values ptr %p", values);
-
-    lut_free(values);
-
-#if 0
-    for(int i = 0; i < 10; ++i) {
-
+    lut_it_all(ages, char *, name, age) {
+        println("%s is %lu years old", name, age);
     }
-#endif
 
-
+    println("Length of table %zu", lut_len(ages));
+    
+    lut_free(ages);
     return 0;
 }
 
