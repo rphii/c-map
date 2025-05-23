@@ -1,15 +1,15 @@
 
 single = []
 
-with open('src/lut.h') as header:
+with open('src/map.h') as header:
     single.append(header.read())
 
-with open('src/lut.c') as source:
-    single.append('#ifdef LOOKUP_IMPLEMENTATION')
+with open('src/map.c') as source:
+    single.append('#ifdef MAP_IMPLEMENTATION')
     single.append(''.join(source.readlines()[1:]))     # skip #include "vec.h"
     single.append('#endif')
 
 single = '\n'.join(single)
-with open('lookup.h', 'w') as dest:
+with open('map.h', 'w') as dest:
     dest.write(single)
 
