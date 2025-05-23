@@ -22,8 +22,6 @@
             it = lut_it_next(lut, it) \
         ) \
     
-//void *_lut_iter_all(lut, 
-
 typedef size_t (*LutHash)(void *);
 typedef int (*LutCmp)(void *, void *);
 typedef void (*LutFree)(void *);
@@ -54,18 +52,6 @@ typedef struct LutMeta {
 
 LutMeta *lut_it_next(void *lut, LutMeta *prev);
 void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width);
-
-// void lut_free(void *lut);
-// void lut_clear(void *lut);
-// //void lut_grow(void *lut);
-// void *lut_copy(void *lut);
-// void lut_once(void *lut);
-// void lut_set(void *);
-// void lut_get();
-// void lut_get_kv();
-// void lut_del();
-// void lut_dump();
-// void lut_iter_all();
 
 #define LUT_SIMPLE_H
 #endif
