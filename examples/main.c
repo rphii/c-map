@@ -6,23 +6,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-size_t hash(unsigned long value) {
-#if 0
-    size_t hash = value;
-#else
-    size_t hash = (value + 12345ULL);
-    hash = ((hash >> 32) ^ hash) * 0x85322754398623ULL;
-    hash = ((hash >> 32) ^ hash) * 0x85322754398623ULL;
-    hash = ((hash >> 32) ^ hash);
-#endif
-    return hash;
-}
-
-int cmp(unsigned long a, unsigned long b) {
-    unsigned long result = a - b;
-    //println("compare %lu %lu = %lu", a, b, result);
-    return result;
-}
+#define println(msg, ...)   printf(msg "\n", ##__VA_ARGS__)
 
 char *str_create(char *str) {
     char *s = 0;
@@ -53,23 +37,64 @@ void str_free(char *s) {
 
 int main(void) {
 
-    unsigned long *ages = 0;
-    lut_config(ages, char *, (LutCmp)str_cmp, (LutHash)str_hash);
+    unsigned long *ages = 0; /* set to 0! */
+    lut_config_key(ages, char *, (LutCmp)str_cmp, (LutHash)str_hash);
     lut_config_free(ages, (LutFree)str_free, 0);
 
-    lut_add(ages, str_create("John"), 19);
-    lut_add(ages, str_create("Lmao"), 25);
-    lut_add(ages, str_create("Nice"), 69);
-    lut_add(ages, str_create("Why"), 420);
-    lut_del(ages, "Why");
+    char *names[] = { /* random names from https://1000randomnames.com/ */
+        "Maxine Houston",
+        "Sylas Davis",
+        "Mia Cross",
+        "Fabian Hubbard",
+        "Rosie Compton",
+        "Abner Sanders",
+        "Everleigh York",
+        "Leandro Meyer",
+        "Sara Ayers",
+        "Ulises Saunders",
+    };
+    const int n_names = sizeof(names)/sizeof(*names);
 
+    println("/* add all names from the array */");
+    for(size_t i = 0; i < n_names; ++i) {
+        lut_set(ages, str_create(names[i]), rand() % 100);
+    }
+
+    println("/* clear all names */");
+    lut_clear(ages);
+
+    println("/* add all names again */");
+    for(size_t i = 0; i < n_names; ++i) {
+        lut_set(ages, str_create(names[i]), rand() % 100);
+    }
+
+    println("/* delete every second person */");
+    for(size_t i = 0; i < n_names; i += 2) {
+        lut_del(ages, names[i]);
+    }
+
+    println("/* print everything remaining */");
     lut_it_all(ages, char *, name, age) {
         println("%s is %lu years old", name, age);
     }
 
-    println("Length of table %zu", lut_len(ages));
+    println("/* print everything by accessing the array */");
+    for(size_t i = 0; i < n_names; ++i) {
+        char *name = names[i];
+        unsigned long *age = lut_get(ages, name);
+        if(age) {
+            println("%s is %lu years old", name, *age);
+        } else {
+            println("%s has no entry", name);
+        }
+    }
+
+    println("Length of table %zu, capacity %zu", lut_len(ages), lut_cap(ages));
     
+    println("/* print everything by accessing the array */");
     lut_free(ages);
+    println("Final pointer %p", ages);
+
     return 0;
 }
 
