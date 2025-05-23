@@ -18,7 +18,6 @@
 #define lut_must_exist(lut)   do { \
         if(!lut) { \
             lut = lut_init(); \
-            /* println("lut didn't exist, mallocd on %p", lut); */ \
         } \
     } while(0)
 
@@ -59,6 +58,25 @@ void *lutmeta_val(LutMeta *meta) {
     return meta->val;
 }
 
+size_t lut_len(void *lut) {
+    Lut *l = lut_base(lut);
+    return l->used;
+}
+
+size_t lut_cap(void *lut) {
+    Lut *l = lut_base(lut);
+    return lut_width_cap(l->width);
+}
+
+void lut_clear(void *lut) {
+    Lut *l = lut_base(lut);
+    size_t cap = lut_width_cap(l->width);
+    for(size_t i = 0; i < cap; ++i) {
+        l->data[i].hash = LUT_EMPTY;
+    }
+    l->used = 0;
+}
+
 void lutmeta_activate(Lut *lut, LutMeta *item, size_t size_val) {
     size_t cap = lut_width_cap(lut->width);
     size_t i = item - lut->data;
@@ -68,52 +86,27 @@ void lutmeta_activate(Lut *lut, LutMeta *item, size_t size_val) {
 }
 
 void lutmeta_deactivate(Lut *lut, LutMeta *item) {
+    if(item->hash != LUT_EMPTY) --lut->used;
     item->hash = LUT_EMPTY;
+    item->key = 0;
+    item->val = 0;
+}
+
+void lutmeta_free(Lut *lut, LutMeta *item) {
     /* wow, this is cursed XD */
     if(item->key && lut->key.f) lut->key.f((uintptr_t *) * (uintptr_t *)item->key);
     if(item->val && lut->val.f) lut->val.f((uintptr_t *) * (uintptr_t *)item->val);
-    item->key = 0;
-    item->val = 0;
-    --lut->used;
+    lutmeta_deactivate(lut, item);
 }
 
-void _lut_config(void *lut, size_t key_size, LutCmp key_cmp, LutHash key_hash) {
-    void **p = lut;
-    lut_must_exist(*p);
-    Lut *l = lut_base(*p);
-    l->key.hash = key_hash;
-    l->key.cmp = key_cmp;
-    l->key.size = key_size;
-}
-
-void _lut_config_free(void *lut, LutFree free_key, LutFree free_val) {
-    void **p = lut;
-    lut_must_exist(*p);
-    Lut *l = lut_base(*p);
-    l->key.f = free_key;
-    l->val.f = free_val;
-}
-
-void lut_set_hash(void *lut, LutHash hash) {
-    void **p = lut;
-    lut_must_exist(*p);
-    Lut *l = lut_base(*p);
-    l->key.hash = hash;
-}
-
-void lut_set_cmp(void *lut, LutCmp cmp) {
-    void **p = lut;
-    lut_must_exist(*p);
-    Lut *l = lut_base(*p);
-    l->key.cmp = cmp;
-}
-
-LutMeta *_lut_get_item(Lut *lut, void *key, size_t hash, bool intend_to_set) {
+static LutMeta *_lut_get_item(Lut *lut, void *key, size_t hash, bool intend_to_set) {
+    if(!intend_to_set && !lut->used) return 0;
     size_t perturb = hash >> 5;
     size_t mask = ~(SIZE_MAX << lut->width);
     size_t i = mask & hash;
     LutMeta *item = lut_get_at(lut, i);
-    for(;;) {
+    for(size_t n = 1; n < lut->width; ++n) {
+        //printf("item %p @ %zu", item, i);getchar();
         if(intend_to_set && item->hash == LUT_EMPTY) break;
         if(item->hash == hash) {
             void *meta_key = lutmeta_key(item);
@@ -130,43 +123,7 @@ LutMeta *_lut_get_item(Lut *lut, void *key, size_t hash, bool intend_to_set) {
     return item;
 }
 
-LutMeta *lut_it_next(void *lut, LutMeta *prev) {
-    if(!lut) return 0;
-    Lut *l = lut_base(lut);
-    size_t i = prev ? (prev - l->data) + 1 : 0;
-    if(i >= lut_width_cap(l->width)) {
-        return 0;
-    }
-    size_t cap = lut_width_cap(l->width);
-    do {
-        if(l->data[i].hash == LUT_EMPTY) continue;
-        return &l->data[i];
-    } while(++i < cap);
-    return 0;
-}
-
-size_t lut_cap(void *lut) {
-    Lut *l = lut_base(lut);
-    return lut_width_cap(l->width);
-}
-
-void lut_print(void *lut) {
-    Lut *l = lut_base(lut);
-    // println("lut base %p (.data %p, .width %zu", l, lut, l->width);
-    for(size_t i = 0; i < lut_width_cap(l->width); ++i) {
-        LutMeta *item = lut_get_at(l, i);
-        printf("  lut item %zu : %p, %p + %p, ", i, item, item->key, item->val);
-        if(item->hash == LUT_EMPTY) println("(empty)");
-        else println("hash %zx", item->hash);
-    }
-}
-
-size_t lut_len(void *lut) {
-    Lut *l = lut_base(lut);
-    return l->used;
-}
-
-void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width) {
+static void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width) {
     Lut zero = {0};
     Lut *l = lut ? lut_base(lut) : &zero;
     if(lut && width <= l->width) return lut;
@@ -206,7 +163,25 @@ void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width) {
     return &grown->data;
 }
 
-void *_lut_add2(void *lut, size_t size_val, void *key) {
+
+void _lut_config_key(void *lut, size_t key_size, LutCmp key_cmp, LutHash key_hash) {
+    void **p = lut;
+    lut_must_exist(*p);
+    Lut *l = lut_base(*p);
+    l->key.hash = key_hash;
+    l->key.cmp = key_cmp;
+    l->key.size = key_size;
+}
+
+void _lut_config_free(void *lut, LutFree free_key, LutFree free_val) {
+    void **p = lut;
+    lut_must_exist(*p);
+    Lut *l = lut_base(*p);
+    l->key.f = free_key;
+    l->val.f = free_val;
+}
+
+void *_lut_set(void *lut, size_t size_val, void *key) {
     void **p = lut;
     lut_must_exist(*p);
     Lut *l = lut_base(*p);
@@ -218,9 +193,7 @@ void *_lut_add2(void *lut, size_t size_val, void *key) {
     l = lut_base(*p);
     size_t hash = l->key.hash(key) % LUT_EMPTY;
     LutMeta *item = _lut_get_item(l, key, hash, true);
-    if(item->hash != LUT_EMPTY) {
-        lutmeta_deactivate(l, item);
-    }
+    lutmeta_free(l, item);
     lutmeta_activate(l, item, size_val);
     item->hash = hash;
     void *meta_key = lutmeta_key(item);
@@ -229,10 +202,34 @@ void *_lut_add2(void *lut, size_t size_val, void *key) {
     return meta_val;
 }
 
+LutMeta *lut_it_next(void *lut, LutMeta *prev) {
+    if(!lut) return 0;
+    Lut *l = lut_base(lut);
+    size_t i = prev ? (prev - l->data) + 1 : 0;
+    if(i >= lut_width_cap(l->width)) {
+        return 0;
+    }
+    size_t cap = lut_width_cap(l->width);
+    do {
+        if(l->data[i].hash == LUT_EMPTY) continue;
+        return &l->data[i];
+    } while(++i < cap);
+    return 0;
+}
+
 void *_lut_get(void *lut, void *key) {
     Lut *l = lut_base(lut);
     LutMeta *got = _lut_get_item(l, key, l->key.hash(key), false);
     return got->val;
+}
+
+void _lut_del(void *lut, void *key) {
+    Lut *l = lut_base(lut);
+    LutMeta *item = _lut_get_item(l, key, l->key.hash(key), false);
+    if(item) {
+        item->hash = LUT_EMPTY;
+        --l->used;
+    }
 }
 
 void _lut_free(void *lut) {
@@ -242,18 +239,10 @@ void _lut_free(void *lut) {
     if(l->key.f || l->val.f) {
         for(size_t i = 0; i < lut_width_cap(l->width); ++i) {
             LutMeta *item = &l->data[i];
-            lutmeta_deactivate(l, item);
+            lutmeta_free(l, item);
         }
     }
     free(l);
     *p = 0;
-}
-
-void _lut_del(void *lut, void *key) {
-    Lut *l = lut_base(lut);
-    LutMeta *item = _lut_get_item(l, key, l->key.hash(key), false);
-    if(item) {
-        lutmeta_deactivate(l, item);
-    }
 }
 
