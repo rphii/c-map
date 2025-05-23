@@ -145,7 +145,7 @@ static void *_map_grow2(void *map MAP_DEBUG_DEFS, size_t size_key, size_t size_v
         map_error("invalid allocation size: %zu", cap);
     }
     size_t bytes = sizeof(Map) + (sizeof(MapMeta) + size_key + size_val) * cap;
-    if((bytes - sizeof(Map)) / (sizeof(MapMeta) - size_key - size_val != cap)) {
+    if((bytes - sizeof(Map)) / (sizeof(MapMeta) + size_key + size_val) != cap) {
         map_error("failed allocation of: %zu elements (%zu bytes)", cap, bytes);
     }
     Map *grown = malloc(bytes);
@@ -200,12 +200,12 @@ void _map_config_key(void *map MAP_DEBUG_DEFS, size_t key_size, MapCmp key_cmp, 
     l->key.f = key_free;
 }
 
-void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree free_val) {
+void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree val_free) {
     map_assert_arg(map);
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
-    l->val.f = free_val;
+    l->val.f = val_free;
 }
 
 void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {

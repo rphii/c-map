@@ -44,7 +44,7 @@ size_t map_cap(void *map);
 void map_clear(void *map);
 
 #define map_config_key(map, key_type, key_cmp, key_hash, key_free)  _map_config_key(&map MAP_DEBUG_INFO, sizeof(key_type), key_cmp, key_hash, key_free)
-#define map_config_free(map, free_key, free_val)                    _map_config_free(&map MAP_DEBUG_INFO, free_val)
+#define map_config_val(map, val_free)                               _map_config_val(&map MAP_DEBUG_INFO, val_free)
 
 #define map_set(map, key, val)  (*(typeof(map))(_map_set(&map MAP_DEBUG_INFO, sizeof(*map), (void *)(uintptr_t)key)) = val)
 #define map_get(map, key)       (typeof(map))(_map_get(map, (void *)(uintptr_t)key))
@@ -66,7 +66,7 @@ void map_clear(void *map);
 /* actual functions, probably don't use directly {{{ */
 
 void _map_config_key(void *map MAP_DEBUG_DEFS, size_t key_size, MapCmp key_cmp, MapHash key_hash, MapFree key_free);
-void _map_config_free(void *map MAP_DEBUG_DEFS, MapFree free_val);
+void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree val_free);
 
 void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key);
 void *_map_get(void *map, void *key);
@@ -172,8 +172,6 @@ void mapmeta_activate(Map *map, MapMeta *item, size_t size_val) {
     map_assert_arg(size_val);
     size_t cap = map_width_cap(map->width);
     size_t i = item - map->data;
-    //item->key = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)));
-    //item->val = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)) + map->key.size);
     item->val = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)));
     item->key = (void *)((unsigned char *)map->data + (sizeof(MapMeta) * cap) + (i * (map->key.size + size_val)) + size_val);
     ++map->used;
@@ -205,7 +203,6 @@ static MapMeta *_map_get_item(Map *map, void *key, size_t hash, bool intend_to_s
     size_t i = mask & hash;
     MapMeta *item = map_get_at(map, i);
     for(size_t n = 1; n < map->width; ++n) {
-        //printf("item %p @ %zu", item, i);getchar();
         if(intend_to_set && item->hash == LUT_EMPTY) break;
         if(item->hash == hash) {
             void *meta_key = mapmeta_key(item);
@@ -228,7 +225,13 @@ static void *_map_grow2(void *map MAP_DEBUG_DEFS, size_t size_key, size_t size_v
     if(map && width <= l->width) return map;
     size_t cap_old = map_width_cap(l->width);
     size_t cap = map_width_cap(width);
+    if(cap * 2 < cap) {
+        map_error("invalid allocation size: %zu", cap);
+    }
     size_t bytes = sizeof(Map) + (sizeof(MapMeta) + size_key + size_val) * cap;
+    if((bytes - sizeof(Map)) / (sizeof(MapMeta) + size_key + size_val) != cap) {
+        map_error("failed allocation of: %zu elements (%zu bytes)", cap, bytes);
+    }
     Map *grown = malloc(bytes);
     if(!grown) {
         map_error("could not allocate map");
@@ -248,7 +251,6 @@ static void *_map_grow2(void *map MAP_DEBUG_DEFS, size_t size_key, size_t size_v
     if(map) {
         for(size_t i = 0; i < cap_old; ++i) {
             MapMeta *src = map_get_at(l, i);
-            // println("  re-add src %3zu : %p", i, src);
             if(src->hash == LUT_EMPTY) continue;
             size_t hash = src->hash;
             MapMeta *item = _map_get_item(grown, mapmeta_key(src), hash, true);
@@ -282,12 +284,12 @@ void _map_config_key(void *map MAP_DEBUG_DEFS, size_t key_size, MapCmp key_cmp, 
     l->key.f = key_free;
 }
 
-void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree free_val) {
+void _map_config_val(void *map MAP_DEBUG_DEFS, MapFree val_free) {
     map_assert_arg(map);
     void **p = map;
     map_must_exist(*p);
     Map *l = map_base(*p);
-    l->val.f = free_val;
+    l->val.f = val_free;
 }
 
 void *_map_set(void *map MAP_DEBUG_DEFS, size_t size_val, void *key) {
