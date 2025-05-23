@@ -1,6 +1,7 @@
 #define VECTOR_IMPLEMENTATION
-#include "../c-vector-simple/vector.h"
-#include "lut.h"
+#define LOOKUP_IMPLEMENTATION
+#include "vector.h"
+#include "../lookup.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -43,10 +44,7 @@ size_t str_hash(char *str)
 }
 
 int str_cmp(char *a, char *b) {
-    size_t la = vec_len(a);
-    size_t lb = vec_len(b);
-    if(la != lb) return la - lb;
-    return memcmp(a, b, la);
+    return strcmp(a, b);
 }
 
 void str_free(char *s) {
@@ -63,6 +61,7 @@ int main(void) {
     lut_add(ages, str_create("Lmao"), 25);
     lut_add(ages, str_create("Nice"), 69);
     lut_add(ages, str_create("Why"), 420);
+    lut_del(ages, "Why");
 
     lut_it_all(ages, char *, name, age) {
         println("%s is %lu years old", name, age);

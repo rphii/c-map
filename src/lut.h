@@ -8,6 +8,7 @@
 #define lut_free(lut)   _lut_free(&lut)
 #define lut_add(lut, key, val)  (*(typeof(lut))(_lut_add2(&lut, sizeof(*lut), (void *)(uintptr_t)key)) = val)
 #define lut_get(lut, key)       (typeof(lut))(_lut_get(lut, (void *)(uintptr_t)key))
+#define lut_del(lut, key)       (_lut_del(lut, (void *)(uintptr_t)key))
 #define lut_config(lut, key_type, key_cmp, key_hash)    _lut_config(&lut, sizeof(key_type), key_cmp, key_hash)
 #define lut_config_free(lut, free_key, free_val)        _lut_config_free(&lut, free_key, free_val)
 
@@ -21,7 +22,6 @@
             it = lut_it_next(lut, it) \
         ) \
     
-
 //void *_lut_iter_all(lut, 
 
 typedef size_t (*LutHash)(void *);
@@ -35,7 +35,7 @@ void lut_set(void *lut, void *key);
 void *_lut_get(void *lut, void *key);
 void lut_ref(void *lut, void *key);
 void lut_copy(void *lut, void *key);
-void lut_del(void *lut, void *key);
+void _lut_del(void *lut, void *key);
 size_t lut_len(void *lut);
 
 size_t lut_cap(void *lut);
