@@ -11,11 +11,11 @@ map_clear(map) /* clear map */
 map_config_key(map, key_type, key_cmp, key_hash, key_free) /* config options for key */
 map_config_val(map, val_free) /* config options for value */
 map_set(map, key, val)   /* set a value */
+map_once(map, key, val)   /* set a value once, fail - exit(1) - if it existed already */
 map_get(map, key) /* get a value */
 map_del(map, key) /* delete a value */
 map_free(map) /* free map */
-
-map_it_all(map, out_type, out_key, out_val)   \
+map_it_all(map, out_type, out_key, out_val) /* iterate over all key/value pairs */
 ```
 
 ## Error Handling
@@ -54,4 +54,7 @@ To create the [single-header file](array.h), use the [python script](gen-single-
 
 - <https://github.com/rphii/c-array>
 
+## TODO
+
+map\_copy...
 
