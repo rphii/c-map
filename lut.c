@@ -1,5 +1,6 @@
 #include "lut.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,7 @@ typedef struct Lut {
     LutCmp cmp;
     size_t used;
     size_t width;
+    size_t key_size;
     LutMeta *data;
 } Lut;
 
@@ -52,6 +54,15 @@ void *lutmeta_key(LutMeta *meta) {
 void *lutmeta_val(LutMeta *meta) {
     return meta->val;
     //return ((unsigned char *)meta) + sizeof(LutMeta) + size_key;
+}
+
+void _lut_config(void *lut, size_t key_size, LutCmp key_cmp, LutHash key_hash) {
+    void **p = lut;
+    lut_must_exist(*p);
+    Lut *l = lut_base(*p);
+    l->hash = key_hash;
+    l->cmp = key_cmp;
+    l->key_size = key_size;
 }
 
 void lut_set_hash(void *lut, LutHash hash) {
@@ -77,8 +88,8 @@ LutMeta *_lut_get_item(Lut *lut, void *key, size_t hash, bool intend_to_set) {
     LutMeta *item = lut_get_at(lut, i);
     //println("get item @ hash %zx on %p", hash, lut);
     for(;;) {
-        getchar();
-        println("item %p @ %zu, hash %zx <=> %zx", item, i, item->hash, hash);
+        //getchar();
+        //println("item %p @ %zu, hash %zx <=> %zx", item, i, item->hash, hash);
         if(intend_to_set && item->hash == LUT_EMPTY) break;
         if(item->hash == hash) {
             void *meta_key = lutmeta_key(item);
@@ -126,6 +137,7 @@ void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width) {
     grown->width = width;
     grown->used = l->used;
     grown->cmp = l->cmp;
+    grown->key_size = l->key_size;
     println("  .cmp %p", l->cmp);
     grown->hash = l->hash;
     grown->data = (LutMeta *)((unsigned char *)grown + sizeof(Lut));
@@ -165,14 +177,15 @@ void *_lut_grow2(void *lut, size_t size_key, size_t size_val, size_t width) {
 }
 
 
-void *_lut_add2(void *lut, size_t size_val, void *key, size_t size_key) {
+void *_lut_add2(void *lut, size_t size_val, void *key) {
     void **p = lut;
     lut_must_exist(*p);
     Lut *l = lut_base(*p);
-    size_t size = size_val + size_key + sizeof(LutMeta);
+    assert(l->key_size);
+    size_t size = size_val + l->key_size + sizeof(LutMeta);
     //if(2 * l->used >= lut_width_cap(l->width)) {
     if(l->used + 1 > lut_width_cap(l->width)) {
-        *p = _lut_grow2(*p, size_key, size_val, l->width + 2);
+        *p = _lut_grow2(*p, l->key_size, size_val, l->width + 2);
     }
     l = lut_base(*p);
     size_t hash = l->hash(key) % LUT_EMPTY;
@@ -185,7 +198,7 @@ void *_lut_add2(void *lut, size_t size_val, void *key, size_t size_key) {
     }
     item->hash = hash;
     void *meta_key = lutmeta_key(item);
-    memcpy(meta_key, &key, size_key);
+    memcpy(meta_key, &key, l->key_size);
     void *meta_val = lutmeta_val(item);
     return meta_val;
 }

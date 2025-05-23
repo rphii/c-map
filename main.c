@@ -15,8 +15,9 @@ int cmp(unsigned long a, unsigned long b) {
 int main(void) {
 
     unsigned long *values = 0;
-    lut_set_cmp(&values, (LutCmp)cmp);
-    lut_set_hash(&values, (LutHash)hash);
+    //lut_set_cmp(&values, (LutCmp)cmp);
+    //lut_set_hash(&values, (LutHash)hash);
+    lut_config(values, int, (LutCmp)cmp, (LutHash)hash);
 
     int key = 0xBB;
     unsigned long value = 456;
