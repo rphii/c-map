@@ -27,66 +27,72 @@ size_t str_hash(char *str)
     return hash;
 }
 
-int str_cmp(char *a, char *b) {
-    return strcmp(a, b);
+int str_cmp(char **a, char **b) {
+    return strcmp(*a, *b);
 }
 
-void str_free(char *s) {
-    vec_free(s);
+void str_free(char **s) {
+    if(!*s) return;
+    vec_free(*s);
 }
 
 int main(void) {
 
     unsigned long *ages = 0; /* set to 0! */
-    map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash, (MapFree)str_free);
+    ///map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash, (MapFree)str_free);
+    map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash, 0);
 
     char *names[] = { /* random names from https://1000randomnames.com/ */
-        "Maxine Houston",
-        "Sylas Davis",
-        "Mia Cross",
-        "Fabian Hubbard",
-        "Rosie Compton",
-        "Abner Sanders",
-        "Everleigh York",
-        "Leandro Meyer",
-        "Sara Ayers",
-        "Ulises Saunders",
+        str_create("Maxine Houston"),
+        str_create("Sylas Davis"),
+        str_create("Mia Cross"),
+        str_create("Fabian Hubbard"),
+        str_create("Rosie Compton"),
+        str_create("Abner Sanders"),
+        str_create("Everleigh York"),
+        str_create("Leandro Meyer"),
+        str_create("Sara Ayers"),
+        str_create("Ulises Saunders"),
     };
     const int n_names = sizeof(names)/sizeof(*names);
 
     println("/* add all names from the array */");
     for(size_t i = 0; i < n_names; ++i) {
-        map_set(ages, str_create(names[i]), rand() % 100);
+        map_set(ages, &names[i], rand() % 100);
     }
 
     println("/* clear all names */");
     map_clear(ages);
+    map_config_key(ages, char *, (MapCmp)str_cmp, (MapHash)str_hash, (MapFree)str_free);
 
     println("/* add all names again */");
     for(size_t i = 0; i < n_names; ++i) {
-        map_set(ages, str_create(names[i]), rand() % 100);
+        map_set(ages, &names[i], rand() % 100);
     }
 
     println("/* delete every second person */");
     for(size_t i = 0; i < n_names; i += 2) {
-        map_del(ages, names[i]);
+        map_del(ages, &names[i]);
     }
 
     println("/* print everything remaining */");
-    map_it_all(ages, char *, name, age) {
+    char *name;
+    unsigned long age;
+    map_it_all(ages, name, age) {
         println("%s is %lu years old", name, age);
     }
 
     println("/* print everything by accessing the array */");
     for(size_t i = 0; i < n_names; ++i) {
         char *name = names[i];
-        unsigned long *age = map_get(ages, name);
+        unsigned long *age = map_get(ages, &name);
         if(age) {
             println("%s is %lu years old", name, *age);
         } else {
             println("%s has no entry", name);
         }
     }
+    printf("%s", *&"lol");
 
     println("Length of table %zu, capacity %zu", map_len(ages), map_cap(ages));
     
